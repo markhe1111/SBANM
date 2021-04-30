@@ -17,6 +17,11 @@ source('SBANM/Utilities/general_Utils.R')
 source('SBANM/Utilities/Triv_Utils.R')
 source('SBANM/Trivariate.R')
 
+#INPUT: 
+# A1,A2,A3 are weighted adjacency matrices
+# Q is selection of number of blocks 
+# init is choice of initialization: 'spec' for Spectral clustering, and 'random' for random uniform assignment of memberships
+
 trivSBANM = function(Q, A1,  A2, A3,
                      init="spec", gr0 = T, max_iter = 200, StochSize.a = 100 , TOL =1e-12 ){
     
@@ -25,6 +30,8 @@ trivSBANM = function(Q, A1,  A2, A3,
   A_sum = Reduce('+' , list(A1, A2, A3)) 
   sphericalspectra_tot = reg.SSP(A_sum,Q) 
   Psi = (Q-1)/Q
+  
+  
   for(initializing_W_Test in 1:1){
     ELBOs = list()
     bigbigtau_list = list()
@@ -35,17 +42,19 @@ trivSBANM = function(Q, A1,  A2, A3,
     taus = list();  diffs = list() ;   P_list = list()
     mu_list = list();  D.log = list()
     
-    #  initial= sapply(sphericalspectra_tot$cluster, function(x)  ones (x,Q) )
-    #  tau = t(initial  )
-    initial = sapply(1:Q, function(x) runif(n, min=0, max=10) ) 
-    tau = initial/rowSums(initial)
+    if(init=='random'){
+      initial = sapply(1:Q, function(x) runif(n, min=0, max=10) ) 
+      tau = initial/rowSums(initial)
+    }else{
+      initial= sapply(sphericalspectra_tot$cluster, function(x)  ones (x,Q) )
+      tau = t(initial  )
+    }
+    
     P. = cbind(rep(.5,Q), rep(.5,Q))
     
-    #  P.[1,] = c(0,1);    
     P.11 = P.[,1];  P.00 = P.[,2]
     alpha = colMeans(tau)
-    #change_P_if_noise_blocks  
-    
+
     TX = makeTX(tau, A1)
     TY = makeTX(tau, A2)
     TZ = makeTX(tau, A3)
@@ -57,21 +66,11 @@ trivSBANM = function(Q, A1,  A2, A3,
     
     T0_Q = makeT0_Q(tau,  P.00) 
     
-    # xi1 =   TX / T0  + TX_Q /  T0_Q 
-    #  xi2 =   TY / T0  + TY_Q /  T0_Q 
-    #  xi3 =   TZ / T0  +  TZ_Q /  T0_Q 
-    
     xi1 =   (Psi)* nan_omit(TX / T0)    + (1-Psi)* nan_omit( TX_Q /  T0_Q )
     xi2 =   (Psi)* nan_omit(TY / T0)    + (1-Psi)* nan_omit( TY_Q /  T0_Q )
     xi3 =   Psi* nan_omit(TZ / T0)    + (1-Psi)* nan_omit( TZ_Q /  T0_Q )
     
-    
     Xis = c(xi1,xi2,xi3)
-    
-    #Mu1 = MStep_Mu_Q(A1,tau)
-    #Mu2 = MStep_Mu_Q(A2,tau  )
-    #Mu3 = MStep_Mu_Q(A3,tau  )
-    
     
     Mu1 = MStep_Mu_Q(A1,tau) * P.11 + (1-P.11)* xi1
     Mu2 = MStep_Mu_Q(A2,tau  )* P.11+ (1-P.11)* xi1
@@ -88,18 +87,12 @@ trivSBANM = function(Q, A1,  A2, A3,
     TY2Q = makeTX2_PQ  (tau,A2, P00 = P.00   ,xi2)
     TZ2Q = makeTX2_PQ  (tau,A3, P00 = P.00   ,xi3)
     
-    #Sigmaxi1  =   TX2 /T0  +   TX2Q /  T0_Q2 
-    #Sigmaxi2  =   TY2 /T0  +   TY2Q /  T0_Q2 
-    #Sigmaxi3  =   TZ2 /T0  +   TZ2Q /  T0_Q2 
-    
     Sigmaxi1  =    (Psi)* nan_omit(TX2 /T0)  +  (1-Psi)* nan_omit(TX2Q /  T0_Q )
     Sigmaxi2  =   (Psi)*  nan_omit(TY2 /T0)  +  (1-Psi)*nan_omit(TY2Q /  T0_Q )
     Sigmaxi3  =   (Psi)*  nan_omit(TZ2 /T0 ) +  (1-Psi)*nan_omit(TZ2Q /  T0_Q )
     
     sigmaXis = c(sqrt(Sigmaxi1),sqrt(Sigmaxi2),sqrt(Sigmaxi3))
     
-    #signal part
-    # NO NOISE!!!
     SigmaX = MStep_SigmaX ( A1,tau,Mu1, xi1 ) * P.11 + Sigmaxi1*P.00
     SigmaY = MStep_SigmaX ( A2,tau,Mu2, xi2)* P.11 + Sigmaxi2*P.00
     SigmaZ = MStep_SigmaX ( A3,tau,Mu3, xi3)* P.11 + Sigmaxi3*P.00
@@ -147,7 +140,6 @@ trivSBANM = function(Q, A1,  A2, A3,
     P. = P.. * delta_t + P. * (1-delta_t)
     P.11 = P.[,1] ; P.00 = P.[,2]
     
-    # Regular EM Step, w subsamp
     taus._m = list()
     for(t in 1:30){
       t12 = E_tau_Triv_Mat (  A1 [m,m],   A2[m,m],  A3[m,m], tau[m,] ,  
@@ -164,7 +156,7 @@ trivSBANM = function(Q, A1,  A2, A3,
       if(t>1) {
         diffs[[t]] = sum(abs( tau.m -taus._m[[t-1]]))
         
-        if(   diffs[[t]]  > 100 ) break  # this is 200 (sampled number) divided by 2
+        if(   diffs[[t]]  > 100 ) break 
         if(   diffs[[t]]  < TOL  ) break
         if(t>3){
           if(  abs( (diffs[[t]] - diffs[[t-1]]  )/ diffs[[t-1]] )   < TOL ) break
@@ -175,8 +167,6 @@ trivSBANM = function(Q, A1,  A2, A3,
     
     tau[m,]  = tau_prev[m,] * (1-delta_t) + tau.m * delta_t
     alpha = colMeans(tau)
-    
-    #change_P_if_noise_blocks  
     
     TX = makeTX(tau, A1)
     TY = makeTX(tau, A2)
@@ -218,8 +208,6 @@ trivSBANM = function(Q, A1,  A2, A3,
     
     sigmaXis = c(sqrt(Sigmaxi1),sqrt(Sigmaxi2),sqrt(Sigmaxi3))
     
-    #signal part
-    # NO NOISE!!!
     SigmaX = MStep_SigmaX ( A1,tau,Mu1, xi1 )*P.11 + Sigmaxi1*P.00
     SigmaY = MStep_SigmaX ( A2,tau,Mu2, xi2)* P.11 + Sigmaxi2*P.00
     SigmaZ = MStep_SigmaX ( A3,tau,Mu3, xi3)* P.11 + Sigmaxi3*P.00
@@ -244,9 +232,6 @@ trivSBANM = function(Q, A1,  A2, A3,
     rhosmax = cbind(rhos12, rhos23,rhos13 )
     rhosmax[rhosmax<0] = 0
     
-    
-    # make this rowmax or rowmeans
-    # then make into zero if 
     CrossList = make_variances_Trivariate  (Q , SigmaX, SigmaY, SigmaZ,rhosmax)
     
     SigmaXY = sapply( CrossList, function(x)   x[1,2])

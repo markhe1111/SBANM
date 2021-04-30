@@ -16,6 +16,12 @@ source('SBANM/Utilities/general_Utils.R')
 source('SBANM/Utilities/Biv_Utils.R')
 source('SBANM/Bivariate.R')
 
+#INPUT: 
+# A1,A2  are weighted adjacency matrices
+# Q is selection of number of blocks 
+# init is choice of initialization: 'spec' for Spectral clustering, and 'random' for random uniform assignment of memberships
+
+
 bivSBANM = function(Q, A1,  A2, init="spec", gr0 = T, max_iter = 200, StochSize.a = 100 , TOL =1e-12 ){
   
   n = ncol(A1)
@@ -33,8 +39,6 @@ bivSBANM = function(Q, A1,  A2, init="spec", gr0 = T, max_iter = 200, StochSize.
     taus = list();  diffs = list() ;   P_list = list()
     mu_list = list();  D.log = list()
     
-    #initial= sapply(sphericalspectra_tot$cluster, function(x)  ones (x,Q) )
-    #   tau = t(initial  )
     if(init=='random'){
       initial = sapply(1:Q, function(x) runif(n, min=0, max=10) ) 
       tau = initial/rowSums(initial)
@@ -44,11 +48,9 @@ bivSBANM = function(Q, A1,  A2, init="spec", gr0 = T, max_iter = 200, StochSize.
     }
     P. = cbind(rep( (Q-1)/Q  ,Q), rep(1/Q,Q))
     
-    #  P.[1,] = c(0,1);    
     P.11 = P.[,1];  P.00 = P.[,2]
     alpha = colMeans(tau)
-    #change_P_if_noise_blocks  
-    
+
     TX = makeTX(tau, A1)
     TY = makeTX(tau, A2)
     
@@ -70,17 +72,13 @@ bivSBANM = function(Q, A1,  A2, init="spec", gr0 = T, max_iter = 200, StochSize.
     TX2 =  makeTX2(A1,tau,xi1)
     TY2 =  makeTX2(A2,tau,xi2)
     
-    # PQ is in alt
-    
     TX2Q = makeTX2_PQ  (tau,A1, P00 = P.00   ,xi1)
     TY2Q = makeTX2_PQ  (tau,A2, P00 = P.00   ,xi2)
     
     Sigmaxi1  =    (Psi)* nan_omit(TX2 /T0)  +  (1-Psi)* nan_omit(TX2Q /  T0_Q )
     Sigmaxi2  =   (Psi)*  nan_omit(TY2 /T0)  +  (1-Psi)*nan_omit(TY2Q /  T0_Q )
     sigmaXis = c(sqrt(Sigmaxi1),sqrt(Sigmaxi2) )
-    
-    #signal part
-    # NO NOISE!!!
+
     SigmaX = MStep_SigmaX ( A1,tau,Mu1, xi1 ) * P.11 + Sigmaxi1*P.00
     SigmaY = MStep_SigmaX ( A2,tau,Mu2, xi2)* P.11 + Sigmaxi2*P.00
     
@@ -107,7 +105,6 @@ bivSBANM = function(Q, A1,  A2, init="spec", gr0 = T, max_iter = 200, StochSize.
     Nq_inv2 =   ( 1 + 1/ (Nq_inv1) )
     N_n = 1/ Nq_inv2
     norm_N =  nan_omit ( as.numeric( N_n/ sum(N_n) ))
-    # nan_omit(norm_N)
     if(sum(norm_N)==0){
       norm_N = rep(1/Q,Q)
     }
@@ -116,7 +113,6 @@ bivSBANM = function(Q, A1,  A2, init="spec", gr0 = T, max_iter = 200, StochSize.
     P. = P.. * delta_t + P. * (1-delta_t)
     P.11 = P.[,1] ; P.00 = P.[,2]
     
-    # Regular EM Step, w subsamp
     taus._m = list()
     
     for(t in 1:30){
@@ -135,7 +131,7 @@ bivSBANM = function(Q, A1,  A2, init="spec", gr0 = T, max_iter = 200, StochSize.
       if(t>1) {
         diffs[[t]] = sum(abs( tau.m -taus._m[[t-1]]))
         
-        if(   diffs[[t]]  > 100 ) break  # this is 200 (sampled number) divided by 2
+        if(   diffs[[t]]  > 100 ) break  
         if(   diffs[[t]]  < TOL  ) break
         if(t>3){
           if(  abs( (diffs[[t]] - diffs[[t-1]]  )/ diffs[[t-1]] )   < TOL ) break
@@ -146,8 +142,6 @@ bivSBANM = function(Q, A1,  A2, init="spec", gr0 = T, max_iter = 200, StochSize.
     
     tau[m,]  = tau_prev[m,] * (1-delta_t) + tau.m * delta_t
     alpha = colMeans(tau)
-    
-    #change_P_if_noise_blocks  
     
     TX = makeTX(tau, A1)
     TY = makeTX(tau, A2)
@@ -176,9 +170,7 @@ bivSBANM = function(Q, A1,  A2, init="spec", gr0 = T, max_iter = 200, StochSize.
     Sigmaxi2  =   (Psi)*  nan_omit(TY2 /T0)  +  (1-Psi)*nan_omit(   (TY2Q) /  T0_Q )
     
     sigmaXis = c(sqrt(Sigmaxi1),sqrt(Sigmaxi2) )
-    
-    #signal part
-    # NO NOISE!!!
+
     SigmaX = MStep_SigmaX ( A1,tau,Mu1, xi1 )*P.11 + Sigmaxi1*P.00
     SigmaY = MStep_SigmaX ( A2,tau,Mu2, xi2)* P.11 + Sigmaxi2*P.00
     
