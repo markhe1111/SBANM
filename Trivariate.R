@@ -20,18 +20,17 @@ source('SBANM/Trivariate.R')
 #INPUT: 
 # A1,A2,A3 are weighted adjacency matrices
 # Q is selection of number of blocks 
-# init is choice of initialization: 'spec' for Spectral clustering, and 'random' for random uniform assignment of memberships
+ # TOL is tolerance for cutting off 
 
-trivSBANM = function(Q, A1,  A2, A3,
-                     init="spec", gr0 = T, max_iter = 200, StochSize.a = 100 , TOL =1e-12 ){
-    
-  n = ncol(A1)
+
+trivSBANM = function(Q, A1,  A2, A3, TOL =1e-12 ){
+  
   
   A_sum = Reduce('+' , list(A1, A2, A3)) 
   sphericalspectra_tot = reg.SSP(A_sum,Q) 
   Psi = (Q-1)/Q
   
-  
+  n_test = ncol(A1)
   for(initializing_W_Test in 1:1){
     ELBOs = list()
     bigbigtau_list = list()
@@ -42,19 +41,20 @@ trivSBANM = function(Q, A1,  A2, A3,
     taus = list();  diffs = list() ;   P_list = list()
     mu_list = list();  D.log = list()
     
-    if(init=='random'){
-      initial = sapply(1:Q, function(x) runif(n, min=0, max=10) ) 
-      tau = initial/rowSums(initial)
-    }else{
-      initial= sapply(sphericalspectra_tot$cluster, function(x)  ones (x,Q) )
-      tau = t(initial  )
-    }
+    initial_1=sapply(sphericalspectra_tot$cluster, function(x)  ones (x,Q) )
+   
+    tau.01 =  t(initial_1) ;  
+    tau.02 =   t(  sapply(1:n_test,  function(x) rep(1/Q,Q)) )
+    tau.0 = tau.01 + tau.02  ;  
+    tau. = tau.0 /  rowSums(tau.0)
     
-    P. = cbind(rep(.5,Q), rep(.5,Q))
+    tau =tau.
+    
+    P. = cbind(rep( 1- 1/Q,Q), rep( 1/Q ,Q))
     
     P.11 = P.[,1];  P.00 = P.[,2]
     alpha = colMeans(tau)
-
+    
     TX = makeTX(tau, A1)
     TY = makeTX(tau, A2)
     TZ = makeTX(tau, A3)
@@ -111,11 +111,11 @@ trivSBANM = function(Q, A1,  A2, A3,
   }
   options(warn=2)
   
-  for(h in  1 :max_iter ){
+  for(h in  1 :200 ){
     
     tau_prev = tau
     delta_t =  1- 1/(h+1) 
-    StochSize =   min(n, round(  StochSize.a + n *  delta_t^2)  )
+    StochSize =   min(n, round(  100 + n *  delta_t^2)  )
     m= sort(sample(n,  StochSize))
     tau.m = tau[m,]
     
@@ -125,13 +125,14 @@ trivSBANM = function(Q, A1,  A2, A3,
                                                    SigmaXY, SigmaYZ,  SigmaXZ, sigmaXis))
     
     
-   
+    
     
     Nq_inv1 =  as.brob( exp( QQs + log( (1-Psi)/  Psi)) )
     Nq_inv2 =   ( 1 + 1/ (Nq_inv1) )
     
     N_n = 1/ Nq_inv2
     norm_N =  nan_omit ( as.numeric( N_n/ sum(N_n) ))
+    
     if(sum(norm_N)==0){
       norm_N = rep(1/Q,Q)
     }
@@ -157,9 +158,9 @@ trivSBANM = function(Q, A1,  A2, A3,
         diffs[[t]] = sum(abs( tau.m -taus._m[[t-1]]))
         
         if(   diffs[[t]]  > 100 ) break 
-        if(   diffs[[t]]  < TOL  ) break
+        if(   diffs[[t]]  < 1e-6  ) break
         if(t>3){
-          if(  abs( (diffs[[t]] - diffs[[t-1]]  )/ diffs[[t-1]] )   < TOL ) break
+          if(  abs( (diffs[[t]] - diffs[[t-1]]  )/ diffs[[t-1]] )   < 1e-6 ) break
         }
         print (paste('tau diff - micro iter', diffs[[t]]))
       }
@@ -247,7 +248,7 @@ trivSBANM = function(Q, A1,  A2, A3,
     if(h>1){
       print (list('all tau', sum(abs( bigtau_list[[h]] -  bigtau_list[[h-1]]   )) , 
                   tautable(tau),P.,round(rhos,2) ))
-      if (sum(abs( bigtau_list[[h]] -  bigtau_list[[h-1]] )) < TOL ) break
+      if (sum(abs( bigtau_list[[h]] -  bigtau_list[[h-1]] )) < 1e-6 ) break
     }else{
       print(paste('end first round', tautable(tau)))
     }
@@ -260,8 +261,6 @@ trivSBANM = function(Q, A1,  A2, A3,
                      Alpha_list=Alpha_list, bigtau_list=bigtau_list ,P_list=P_list )
   return(RunList)
 }
-
-
 
 
 

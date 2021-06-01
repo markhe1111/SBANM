@@ -177,4 +177,164 @@ arma::mat makeCovSig(double q,
    return ij ;
  }
 
+
+
+
+
+// [[Rcpp::export]]
+NumericMatrix trivELBO_i (double i ,
+                          NumericMatrix A1, 
+                          NumericMatrix A2,  
+                          NumericMatrix A3,  
+                          NumericMatrix tau,  
+                          NumericVector Mu1,
+                          NumericVector Mu2,
+                          NumericVector Mu3,
+                          NumericVector SigmaX,
+                          NumericVector SigmaY,
+                          NumericVector SigmaZ,
+                          NumericVector SigmaXY,
+                          NumericVector SigmaYZ,
+                          NumericVector SigmaXZ,
+                          NumericVector Xis,
+                          NumericVector sigmaXis, 
+                          NumericVector P1){
+  
+  int n = tau.nrow();
+  int Q = tau.ncol();
+  
+  NumericMatrix ij(Q,Q);
+  NumericVector QVec(n);  
+  
+  for(int q = 0; q < Q; ++q ) {
+    for(int l = 0; l < Q; ++l ) {
+       
+        for(int j = 0; j < n; ++j ) {
+          
+          if(i != j){ 
+            
+            double ijQL = 0;
+            
+            NumericVector X = NumericVector::create(  A1(i,j), A2(i,j), A3(i,j) );
+            
+            if(q==l){   
+              
+              NumericVector Mus = NumericVector::create(  Mu1[q], Mu2[q], Mu3[q]);
+              arma::mat CovMat =   makeCovSig( q, SigmaX,SigmaY , SigmaZ,
+                                               SigmaXY, SigmaYZ ,  SigmaXZ);
+              
+              arma::mat  CovNoi (3,3);
+              CovNoi(0,0) = pow(sigmaXis[0],2) ;
+              CovNoi(1,1) = pow(sigmaXis[1],2) ;
+              CovNoi(2,2) = pow(sigmaXis[2],2) ;  
+              
+              double SignalTerm = getTrivSignal(X,Mus, CovMat)  ;
+              double NoiseTerm = getTrivSignal(X,Xis, CovNoi)  ;
+              
+              // log term:
+              ijQL =  SignalTerm *P1[q] + NoiseTerm*(1-P1[q])  ; 
+              
+            }else{ 
+              
+              arma::mat CovNoi (3,3);
+              CovNoi(0,0) = pow(sigmaXis[0],2) ;
+              CovNoi(1,1) = pow(sigmaXis[1],2) ;
+              CovNoi(2,2) = pow(sigmaXis[2],2) ;  
+              
+              double NoiseTerm = getTrivSignal(X,Xis, CovNoi)  ;
+              ijQL =    NoiseTerm ;
+              
+            } 
+            
+            QVec(j) =   tau(i,q)*tau(j,l) * ijQL;
+          }
+          
+        }
  
+      ij(q,l) = vectorSum(QVec)  ;
+    }
+  }
+  
+  return ij ;
+}
+
+
+
+
+// [[Rcpp::export]]
+NumericVector E_gradtau_i    (double i, 
+                              NumericMatrix A1, 
+                              NumericMatrix A2,  
+                              NumericMatrix A3,  
+                              NumericMatrix tau,  
+                              NumericVector Mu1,
+                              NumericVector Mu2,
+                              NumericVector Mu3,
+                              NumericVector SigmaX,
+                              NumericVector SigmaY,
+                              NumericVector SigmaZ,
+                              NumericVector SigmaXY,
+                              NumericVector SigmaYZ,
+                              NumericVector SigmaXZ,
+                              NumericVector Xis,
+                              NumericVector sigmaXis, 
+                              NumericVector P1 ){
+  
+  int n = tau.nrow();
+  int Q = tau.ncol();
+  
+  NumericVector Grad (Q);
+  
+  for(int q = 0; q < Q; ++q ) {
+    
+    NumericMatrix IQ (n,Q);  
+    double IQ_sum;
+    
+    for(int l = 0; l < Q; ++l ) {
+      for(int j = 0; j < n; ++j ) {
+        
+        if(i != j){ 
+          
+          double IQjl = 0; 
+          NumericVector X = NumericVector::create(  A1(i,j), A2(i,j), A3(i,j) );
+          if(q==l){   
+            NumericVector Mus = NumericVector::create(  Mu1[q], Mu2[q], Mu3[q]);
+            arma::mat CovMat =   makeCovSig( q, SigmaX,SigmaY , SigmaZ,
+                                             SigmaXY, SigmaYZ ,  SigmaXZ);
+            arma::mat  CovNoi (3,3);
+            CovNoi(0,0) = pow(sigmaXis[0],2) ;
+            CovNoi(1,1) = pow(sigmaXis[1],2) ;
+            CovNoi(2,2) = pow(sigmaXis[2],2) ;  
+            
+            double SignalTerm = getTrivSignal(X,Mus, CovMat)  ;
+            double NoiseTerm = getTrivSignal(X,Xis, CovNoi)  ;
+            
+            // log term:
+            IQjl =  SignalTerm *P1[q] + NoiseTerm*(1-P1[q])  ; 
+            
+          }else{ 
+            
+            arma::mat CovNoi (3,3);
+            CovNoi(0,0) = pow(sigmaXis[0],2) ;
+            CovNoi(1,1) = pow(sigmaXis[1],2) ;
+            CovNoi(2,2) = pow(sigmaXis[2],2) ;  
+            
+            double NoiseTerm = getTrivSignal(X,Xis, CovNoi)  ;
+            IQjl =    NoiseTerm ;
+          } 
+          
+          IQ(j,l) =   tau(j,l) * IQjl;
+        }
+      }
+    }
+    IQ_sum = MatrixSum(IQ);
+    Grad(q) =   IQ_sum;
+  }
+  
+  
+  return Grad;
+}
+
+
+
+
