@@ -1,3 +1,4 @@
+ 
 # load packages
 library(matlib)
 library(DescTools)   
@@ -8,29 +9,29 @@ library(fpc)
 library(rlist) 
 library(randnet)
 
-# load functions
-Rcpp::sourceCpp('cpp/Trivariate/E_Step.cpp')
-Rcpp::sourceCpp('cpp/Trivariate/M_Step.cpp')
-Rcpp::sourceCpp('cpp/Trivariate/M_Step_b.cpp')
+#setwd('/Users/markh/Dropbox/DifferentialBlockModel/SBANM/cpp/Trivariate')
 
-source('SBANM/Utilities/general_Utils.R')
-source('SBANM/Utilities/Triv_Utils.R')
-source('SBANM/Trivariate.R')
+# load functions
+Rcpp::sourceCpp('E_Step_AN_NB.cpp')
+Rcpp::sourceCpp('M_Step.cpp')
+Rcpp::sourceCpp('M_Step_b.cpp')
+
+
+source('Utilities/general_Utils.R')
+source('Utilities/Triv_Utils.R') 
 
 #INPUT: 
 # A1,A2,A3 are weighted adjacency matrices
 # Q is selection of number of blocks 
- # TOL is tolerance for cutting off 
+# init is choice of initialization: 'spec' for Spectral clustering, and 'random' for random uniform assignment of memberships
 
 
-trivSBANM = function(Q, A1,  A2, A3, TOL =1e-12 ){
-  
-  
-  A_sum = Reduce('+' , list(A1, A2, A3)) 
-  sphericalspectra_tot = reg.SSP(A_sum,Q) 
+ 
+trivSBANM = function(Q, A1,  A2, A3){
+  Thresh = .05
   Psi = (Q-1)/Q
-  
   n_test = ncol(A1)
+  
   for(initializing_W_Test in 1:1){
     ELBOs = list()
     bigbigtau_list = list()
@@ -41,16 +42,10 @@ trivSBANM = function(Q, A1,  A2, A3, TOL =1e-12 ){
     taus = list();  diffs = list() ;   P_list = list()
     mu_list = list();  D.log = list()
     
-    initial_1=sapply(sphericalspectra_tot$cluster, function(x)  ones (x,Q) )
-   
-    tau.01 =  t(initial_1) ;  
-    tau.02 =   t(  sapply(1:n_test,  function(x) rep(1/Q,Q)) )
-    tau.0 = tau.01 + tau.02  ;  
-    tau. = tau.0 /  rowSums(tau.0)
+    tau = SEPall$tau
+    P. = cbind( SEPall$P.11, 1- SEPall$P.11)
     
-    tau =tau.
-    
-    P. = cbind(rep( 1- 1/Q,Q), rep( 1/Q ,Q))
+    #P. = cbind(rep( 1- 1/Q,Q), rep( 1/Q ,Q))
     
     P.11 = P.[,1];  P.00 = P.[,2]
     alpha = colMeans(tau)
@@ -58,48 +53,54 @@ trivSBANM = function(Q, A1,  A2, A3, TOL =1e-12 ){
     TX = makeTX(tau, A1)
     TY = makeTX(tau, A2)
     TZ = makeTX(tau, A3)
-    
     T0 = makeT0(tau )
+    
     TX_Q = makeTX_PQ (tau, A1, P.00 )
     TY_Q = makeTX_PQ (tau, A2, P.00)
     TZ_Q = makeTX_PQ (tau, A3, P.00)
     
     T0_Q = makeT0_Q(tau,  P.00) 
     
-    xi1 =   (Psi)* nan_omit(TX / T0)    + (1-Psi)* nan_omit( TX_Q /  T0_Q )
-    xi2 =   (Psi)* nan_omit(TY / T0)    + (1-Psi)* nan_omit( TY_Q /  T0_Q )
-    xi3 =   Psi* nan_omit(TZ / T0)    + (1-Psi)* nan_omit( TZ_Q /  T0_Q )
+    xi1 =    nan_omit(TX / T0)   
+    xi2 =    nan_omit(TY / T0)    
+    xi3 =     nan_omit(TZ / T0)    
+    xis = c(xi1,xi2,xi3)
     
-    Xis = c(xi1,xi2,xi3)
+    xiB1 =     nan_omit( TX_Q /  T0_Q )
+    xiB2 =     nan_omit( TY_Q /  T0_Q )
+    xiB3 =    nan_omit( TZ_Q /  T0_Q )
+    xiBs = c(xiB1,xiB2,xiB3)
     
-    Mu1 = MStep_Mu_Q(A1,tau) * P.11 + (1-P.11)* xi1
-    Mu2 = MStep_Mu_Q(A2,tau  )* P.11+ (1-P.11)* xi1
-    Mu3 = MStep_Mu_Q(A3,tau  )* P.11+ (1-P.11)* xi1
-    
+    Mu1 = MStep_Mu_Q(A1,tau) * P.11 + (1-P.11)* xiB1
+    Mu2 = MStep_Mu_Q(A2,tau  )* P.11+ (1-P.11)* xiB2
+    Mu3 = MStep_Mu_Q(A3,tau  )* P.11+ (1-P.11)* xiB3
     
     TX2 =  makeTX2(A1,tau,xi1)
     TY2 =  makeTX2(A2,tau,xi2)
     TZ2 =  makeTX2(A3,tau,xi3)
+    Sigmaxi1  =   nan_omit(TX2 /T0) # * Psi
+    Sigmaxi2  =   nan_omit(TY2 /T0)   
+    Sigmaxi3  =   nan_omit(TZ2 /T0 )  
     
     # PQ is in alt
+    TX2Q = makeTX2_PQ  (tau,A1, P00 = P.00   ,xiB1)
+    TY2Q = makeTX2_PQ  (tau,A2, P00 = P.00   ,xiB2)
+    TZ2Q = makeTX2_PQ  (tau,A3, P00 = P.00   ,xiB3)
     
-    TX2Q = makeTX2_PQ  (tau,A1, P00 = P.00   ,xi1)
-    TY2Q = makeTX2_PQ  (tau,A2, P00 = P.00   ,xi2)
-    TZ2Q = makeTX2_PQ  (tau,A3, P00 = P.00   ,xi3)
-    
-    Sigmaxi1  =    (Psi)* nan_omit(TX2 /T0)  +  (1-Psi)* nan_omit(TX2Q /  T0_Q )
-    Sigmaxi2  =   (Psi)*  nan_omit(TY2 /T0)  +  (1-Psi)*nan_omit(TY2Q /  T0_Q )
-    Sigmaxi3  =   (Psi)*  nan_omit(TZ2 /T0 ) +  (1-Psi)*nan_omit(TZ2Q /  T0_Q )
+    SigmaxiB1  =     nan_omit(TX2Q /  T0_Q ) #*(1-Psi)
+    SigmaxiB2  =     nan_omit(TY2Q /  T0_Q )
+    SigmaxiB3  =     nan_omit(TZ2Q /  T0_Q )
     
     sigmaXis = c(sqrt(Sigmaxi1),sqrt(Sigmaxi2),sqrt(Sigmaxi3))
+    sigmaXiBs = c(sqrt(SigmaxiB1),sqrt(SigmaxiB2),sqrt(SigmaxiB3))
     
-    SigmaX = MStep_SigmaX ( A1,tau,Mu1, xi1 ) * P.11 + Sigmaxi1*P.00
-    SigmaY = MStep_SigmaX ( A2,tau,Mu2, xi2)* P.11 + Sigmaxi2*P.00
-    SigmaZ = MStep_SigmaX ( A3,tau,Mu3, xi3)* P.11 + Sigmaxi3*P.00
+    SigmaX = MStep_SigmaX ( A1,tau,Mu1)* P.11 + SigmaxiB1*P.00
+    SigmaY = MStep_SigmaX ( A2,tau,Mu2)* P.11 + SigmaxiB2*P.00
+    SigmaZ = MStep_SigmaX ( A3,tau,Mu3)* P.11 + SigmaxiB3*P.00
     
-    SigmaXY = MStep_SigmaXY  (A1,A2,tau,Mu1,Mu2 ,xi1,xi2 )*P.11
-    SigmaYZ = MStep_SigmaXY  (A2,A3,tau,Mu2,Mu3 ,xi2,xi3 )*P.11
-    SigmaXZ = MStep_SigmaXY (A1,A3,tau,Mu1,Mu3 ,xi1,xi3 )*P.11
+    SigmaXY = MStep_SigmaXY (A1,A2,tau,Mu1,Mu2  )*P.11
+    SigmaYZ = MStep_SigmaXY (A2,A3,tau,Mu2,Mu3 )*P.11
+    SigmaXZ = MStep_SigmaXY (A1,A3,tau,Mu1,Mu3 )*P.11
     
     rhos12 = SigmaXY  / sqrt(SigmaX * SigmaY)
     rhos23 = SigmaYZ  / sqrt(SigmaY * SigmaZ)
@@ -109,25 +110,25 @@ trivSBANM = function(Q, A1,  A2, A3, TOL =1e-12 ){
     rhos13[is.na(rhos13)] = 0
     
   }
+  
   options(warn=2)
   
-  for(h in  1 :200 ){
+  for(h in  1 :50 ){
     
     tau_prev = tau
     delta_t =  1- 1/(h+1) 
-    StochSize =   min(n, round(  100 + n *  delta_t^2)  )
+    StochSize =   min(n, round(  200 + n *  delta_t )  )
     m= sort(sample(n,  StochSize))
     tau.m = tau[m,]
     
     QQs = sapply( 1:Q,   function(q) get_EN_each_q(q, A1 ,   A2,  A3 , tau ,  
-                                                   Mu1,  Mu2,  Mu3,  Xis, 
+                                                   Mu1,  Mu2,  Mu3,  xiBs, 
                                                    SigmaX, SigmaY, SigmaZ,
-                                                   SigmaXY, SigmaYZ,  SigmaXZ, sigmaXis))
+                                                   SigmaXY, SigmaYZ,  SigmaXZ, sigmaXiBs))
     
     
-    
-    
-    Nq_inv1 =  as.brob( exp( QQs + log( (1-Psi)/  Psi)) )
+    QQs[is.nan(QQs)] = -Inf
+    Nq_inv1 =  as.brob( exp( QQs  ))# + log( (1-Psi)/  Psi)) )
     Nq_inv2 =   ( 1 + 1/ (Nq_inv1) )
     
     N_n = 1/ Nq_inv2
@@ -142,11 +143,14 @@ trivSBANM = function(Q, A1,  A2, A3, TOL =1e-12 ){
     P.11 = P.[,1] ; P.00 = P.[,2]
     
     taus._m = list()
+    
     for(t in 1:30){
       t12 = E_tau_Triv_Mat (  A1 [m,m],   A2[m,m],  A3[m,m], tau[m,] ,  
                               Mu1,  Mu2,  Mu3, SigmaX, SigmaY, SigmaZ,
                               SigmaXY, SigmaYZ,  SigmaXZ,
-                              Xis ,   sigmaXis,     P1 =P.11)
+                              xis ,   sigmaXis,   
+                              xiBs, sigmaXiBs,
+                              P1 =P.11)
       t12[is.nan(t12)] = -Inf
       
       tsum1 = sapply(1:Q, function(q) t12[,q] + log(alpha)[q]  ) 
@@ -156,7 +160,6 @@ trivSBANM = function(Q, A1,  A2, A3, TOL =1e-12 ){
       
       if(t>1) {
         diffs[[t]] = sum(abs( tau.m -taus._m[[t-1]]))
-        
         if(   diffs[[t]]  > 100 ) break 
         if(   diffs[[t]]  < 1e-6  ) break
         if(t>3){
@@ -172,68 +175,63 @@ trivSBANM = function(Q, A1,  A2, A3, TOL =1e-12 ){
     TX = makeTX(tau, A1)
     TY = makeTX(tau, A2)
     TZ = makeTX(tau, A3)
-    
     T0 = makeT0(tau )
+    
     TX_Q = makeTX_PQ (tau, A1, P.00 )
     TY_Q = makeTX_PQ (tau, A2, P.00)
     TZ_Q = makeTX_PQ (tau, A3, P.00)
     
     T0_Q = makeT0_Q(tau,  P.00) 
     
-    xi1 =   (Psi)* nan_omit(TX / T0)    + (1-Psi)* nan_omit( TX_Q /  T0_Q )
-    xi2 =   (Psi)* nan_omit(TY / T0)    + (1-Psi)* nan_omit( TY_Q /  T0_Q )
-    xi3 =     Psi* nan_omit(TZ / T0)    + (1-Psi)* nan_omit( TZ_Q /  T0_Q )
+    xi1 =    nan_omit(TX / T0)   
+    xi2 =    nan_omit(TY / T0)    
+    xi3 =     nan_omit(TZ / T0)    
+    xis = c(xi1,xi2,xi3)
     
+    xiB1 =     nan_omit( TX_Q /  T0_Q )
+    xiB2 =     nan_omit( TY_Q /  T0_Q )
+    xiB3 =    nan_omit( TZ_Q /  T0_Q )
+    xiBs = c(xiB1,xiB2,xiB3)
     
-    Xis = c(xi1,xi2,xi3)
-    
-    Mu1 = MStep_Mu_Q(A1,tau) * P.11 +(1-P.11)* xi1
-    Mu2 = MStep_Mu_Q(A2,tau )* P.11 + (1-P.11)* xi2
-    Mu3 = MStep_Mu_Q(A3,tau )* P.11 + (1-P.11)* xi3
-    
-    Mu1[P.11==0] = xi1
-    Mu2[P.11==0] = xi2
-    Mu3[P.11==0] = xi3
+    Mu1 = MStep_Mu_Q(A1,tau) * P.11 + (1-P.11)* xiB1
+    Mu2 = MStep_Mu_Q(A2,tau  )* P.11+ (1-P.11)* xiB2
+    Mu3 = MStep_Mu_Q(A3,tau  )* P.11+ (1-P.11)* xiB3
     
     TX2 =  makeTX2(A1,tau,xi1)
     TY2 =  makeTX2(A2,tau,xi2)
     TZ2 =  makeTX2(A3,tau,xi3)
+    Sigmaxi1  =   nan_omit(TX2 /T0) # * Psi
+    Sigmaxi2  =   nan_omit(TY2 /T0)   
+    Sigmaxi3  =   nan_omit(TZ2 /T0 )  
     
-    TX2Q = makeTX2_PQ  (tau,A1,P.00, xi1)
-    TY2Q = makeTX2_PQ  (tau,A2,P.00, xi2)
-    TZ2Q = makeTX2_PQ  (tau,A3,P.00, xi3) 
+    TX2Q = makeTX2_PQ  (tau,A1, P00 = P.00   ,xiB1)
+    TY2Q = makeTX2_PQ  (tau,A2, P00 = P.00   ,xiB2)
+    TZ2Q = makeTX2_PQ  (tau,A3, P00 = P.00   ,xiB3)
     
-    Sigmaxi1  =   (Psi)* nan_omit(TX2 /T0)  +   (1-Psi)* nan_omit(  (TX2Q) /  T0_Q )
-    Sigmaxi2  =   (Psi)*  nan_omit(TY2 /T0)  +  (1-Psi)*nan_omit(   (TY2Q) /  T0_Q )
-    Sigmaxi3  =   (Psi)*  nan_omit(TZ2 /T0 ) +  (1-Psi)*nan_omit(   (TZ2Q) /  T0_Q )
-    
+    SigmaxiB1  =     nan_omit(TX2Q /  T0_Q ) #*(1-Psi)
+    SigmaxiB2  =     nan_omit(TY2Q /  T0_Q )
+    SigmaxiB3  =     nan_omit(TZ2Q /  T0_Q )
     sigmaXis = c(sqrt(Sigmaxi1),sqrt(Sigmaxi2),sqrt(Sigmaxi3))
+    sigmaXiBs = c(sqrt(SigmaxiB1),sqrt(SigmaxiB2),sqrt(SigmaxiB3))
     
-    SigmaX = MStep_SigmaX ( A1,tau,Mu1, xi1 )*P.11 + Sigmaxi1*P.00
-    SigmaY = MStep_SigmaX ( A2,tau,Mu2, xi2)* P.11 + Sigmaxi2*P.00
-    SigmaZ = MStep_SigmaX ( A3,tau,Mu3, xi3)* P.11 + Sigmaxi3*P.00
+    SigmaX = MStep_SigmaX ( A1,tau,Mu1)* P.11^2 + SigmaxiB1*P.00^2
+    SigmaY = MStep_SigmaX ( A2,tau,Mu2)* P.11^2 + SigmaxiB2*P.00^2
+    SigmaZ = MStep_SigmaX ( A3,tau,Mu3)* P.11^2 + SigmaxiB3*P.00^2
+    SigmaXY = MStep_SigmaXY (A1,A2,tau,Mu1,Mu2)*P.11
+    SigmaYZ = MStep_SigmaXY (A2,A3,tau,Mu2,Mu3 )*P.11
+    SigmaXZ = MStep_SigmaXY (A1,A3,tau,Mu1,Mu3 )*P.11
     
-    SigmaXY = MStep_SigmaXY  (A1,A2,tau,Mu1,Mu2 ,xi1,xi2 )*P.11
-    SigmaYZ = MStep_SigmaXY  (A2,A3,tau,Mu2,Mu3 ,xi2,xi3 )*P.11
-    SigmaXZ = MStep_SigmaXY (A1,A3,tau,Mu1,Mu3 ,xi1,xi3 )*P.11
-    
-    SigmaX[P.11==0] = Sigmaxi1
-    SigmaY[P.11==0] = Sigmaxi2
-    SigmaZ[P.11==0] = Sigmaxi3
-    
-    rhos12 =  ( nan_omit( SigmaXY  / sqrt(SigmaX * SigmaY)))
-    rhos23 =  ( nan_omit(SigmaYZ  / sqrt(SigmaY * SigmaZ)) )
-    rhos13 =   ( nan_omit(SigmaXZ  / sqrt(SigmaX * SigmaZ)) )
-    
+    SigmaXY[P.11< Thresh] = 0
+    SigmaYZ[P.11< Thresh] = 0
+    SigmaXZ[P.11< Thresh] = 0
+    rhos12 = SigmaXY  / sqrt(SigmaX * SigmaY)
+    rhos23 = SigmaYZ  / sqrt(SigmaY * SigmaZ)
+    rhos13 = SigmaXZ  / sqrt(SigmaX * SigmaZ)
     
     rhos_temp = cbind(rhos12, rhos23,rhos13 )
-    rhos12 = rowMax(rhos_temp) 
-    rhos13 = rowMax(rhos_temp) 
-    rhos23 = rowMax(rhos_temp) 
-    rhosmax = cbind(rhos12, rhos23,rhos13 )
-    rhosmax[rhosmax<0] = 0
+    rhos_temp   [ P.11 <Thresh, ] = 0
     
-    CrossList = make_variances_Trivariate  (Q , SigmaX, SigmaY, SigmaZ,rhosmax)
+    CrossList = make_var_Triv  (Q , SigmaX, SigmaY, SigmaZ,rhos_temp )
     
     SigmaXY = sapply( CrossList, function(x)   x[1,2])
     SigmaYZ = sapply( CrossList, function(x)   x[2,3])
@@ -248,7 +246,7 @@ trivSBANM = function(Q, A1,  A2, A3, TOL =1e-12 ){
     if(h>1){
       print (list('all tau', sum(abs( bigtau_list[[h]] -  bigtau_list[[h-1]]   )) , 
                   tautable(tau),P.,round(rhos,2) ))
-      if (sum(abs( bigtau_list[[h]] -  bigtau_list[[h-1]] )) < 1e-6 ) break
+      if (sum(abs( bigtau_list[[h]] -  bigtau_list[[h-1]] )) < 1e-3 ) break
     }else{
       print(paste('end first round', tautable(tau)))
     }
@@ -261,6 +259,3 @@ trivSBANM = function(Q, A1,  A2, A3, TOL =1e-12 ){
                      Alpha_list=Alpha_list, bigtau_list=bigtau_list ,P_list=P_list )
   return(RunList)
 }
-
-
-

@@ -6,6 +6,10 @@ adjust = function(X, epsilon){
 rowMax = function(M){
   apply(M, 1, max)
 }
+rowMin = function(M){
+  apply(M, 1, min)
+}
+
 nan_omit = function(D){
   D[is.nan(D)] = 0
   D[is.na(D)] = 0

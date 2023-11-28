@@ -120,8 +120,7 @@ double makeTX2_PQ ( NumericMatrix tau ,
 //[[Rcpp::export]]
 NumericVector MStep_SigmaX (NumericMatrix A,
                            NumericMatrix tau,
-                           NumericVector Mu,
-                           double xi ) {
+                           NumericVector Mu ) {
   
   int n = A.ncol();
   int Q = tau.ncol();
@@ -163,9 +162,7 @@ NumericVector MStep_SigmaX (NumericMatrix A,
                                  NumericMatrix A2,
                                  NumericMatrix tau,
                                  NumericVector Mu1,
-                                 NumericVector Mu2,
-                                 double xi,
-                                 double delta){
+                                 NumericVector Mu2){
    
    int n = A1.ncol();
    int Q = tau.ncol();

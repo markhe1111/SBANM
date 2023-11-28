@@ -1,3 +1,33 @@
+make_var_Triv  <-function(Q, varX_qq, varY_qq, varZ_qq, rhos){
+  
+  colnames(rhos) = c('cor_anx_beh', 'cor_beh_mood', 'cor_anx_mood')
+  #rownames(rhos ) = c('B1','B2','B3')
+  Rhos = data.frame(rhos)
+  
+  variances = list()
+  
+  for(q in 1:Q){
+    varmat = matrix(ncol=3, nrow=3, 0)
+    colnames(varmat) =  c('anx', 'beh', 'mood')
+    rownames(varmat) =  c('anx', 'beh', 'mood')
+    
+    varmat[1,1] = varX_qq[q]
+    varmat[2,2] = varY_qq[q]
+    varmat[3,3] = varZ_qq[q]
+    
+    varmat[1,2] = sqrt(varX_qq[q] * varY_qq[q]) *  Rhos$cor_anx_beh[q]
+    varmat[2,1] = sqrt(varX_qq[q] * varY_qq[q]) * Rhos$cor_anx_beh[q]
+    
+    varmat[1,3] = sqrt(varX_qq[q] * varZ_qq[q]) * Rhos$cor_anx_mood[q]
+    varmat[3,1] = sqrt(varX_qq[q] * varZ_qq[q]) * Rhos$cor_anx_mood[q]
+    
+    varmat[2,3] = sqrt(varY_qq[q] * varZ_qq[q]) * Rhos$cor_beh_mood[q]
+    varmat[3,2] = sqrt(varY_qq[q] * varZ_qq[q]) * Rhos$cor_beh_mood[q]
+    
+    variances[[q]] = varmat
+  }
+  return(variances)
+}
 
 make_variances_Trivariate  <-function(Q,varX_qq, varY_qq, varZ_qq,rho_qq){
   variances = list()

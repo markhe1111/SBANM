@@ -162,8 +162,8 @@ NumericVector makeTX_Q ( NumericMatrix tau ,
 
 // [[Rcpp::export]]
 double makeTX_PQ ( NumericMatrix tau ,
-                   NumericMatrix X ,
-                   NumericVector P00) {
+                  NumericMatrix X ,
+                  NumericVector P00) {
   
   int n = tau.nrow();
   int Q = tau.ncol();

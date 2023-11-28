@@ -121,6 +121,8 @@ NumericVector E_tau_Triv_Mat    (NumericMatrix A1,
                                  NumericVector SigmaXZ,
                                  NumericVector Xis,
                                  NumericVector sigmaXis, 
+                                 NumericVector XiBs,
+                                 NumericVector sigmaXiBs, 
                                  NumericVector P1 ){
   
   int n = tau.nrow();
@@ -150,12 +152,12 @@ NumericVector E_tau_Triv_Mat    (NumericMatrix A1,
                                                         SigmaXY, SigmaYZ ,  SigmaXZ);
 
               arma::mat  CovNoi (3,3);
-              CovNoi(0,0) = pow(sigmaXis[0],2) ;
-              CovNoi(1,1) = pow(sigmaXis[1],2) ;
-              CovNoi(2,2) = pow(sigmaXis[2],2) ;  
+              CovNoi(0,0) = pow(sigmaXiBs[0],2) ;
+              CovNoi(1,1) = pow(sigmaXiBs[1],2) ;
+              CovNoi(2,2) = pow(sigmaXiBs[2],2) ;  
               
               double SignalTerm = getTrivSignal(X,Mus, CovMat)  ;
-              double NoiseTerm = getTrivSignal(X,Xis, CovNoi)  ;
+              double NoiseTerm = getTrivSignal(X,XiBs, CovNoi)  ;
                 
               // log term:
               IQjl =  SignalTerm *P1[q] + NoiseTerm*(1-P1[q])  ; 
@@ -183,108 +185,6 @@ NumericVector E_tau_Triv_Mat    (NumericMatrix A1,
   
   return JL;
 }
-
-
-
-
-// [[Rcpp::export]]
-NumericVector E_P   (NumericMatrix A1, 
-                     NumericMatrix A2,  
-                     NumericMatrix A3,  
-                     NumericMatrix tau,  
-                     NumericVector Mu1,
-                     NumericVector Mu2,
-                     NumericVector Mu3,
-                     NumericVector SigmaX,
-                     NumericVector SigmaY,
-                     NumericVector SigmaZ,
-                     NumericVector SigmaXY,
-                     NumericVector SigmaYZ,
-                     NumericVector SigmaXZ,
-                     NumericVector Xis,
-                     NumericVector sigmaXis ){
-  int n = tau.nrow();
-  int Q = tau.ncol();
-  
-  NumericVector QQ(Q); 
-  
-  for(int q = 0; q < Q; ++q ) { 
-    
-    NumericMatrix Pq_ij (n,n);
-    
-    NumericVector Mus = NumericVector::create(  Mu1[q], Mu2[q], Mu3[q]);
-    arma::mat CovMat =   makeCovSig( q, SigmaX,SigmaY , SigmaZ, SigmaXY, SigmaYZ ,  SigmaXZ);
-    arma::mat  CovNoi (3,3);
-    CovNoi(0,0) = pow(sigmaXis[0],2) ;
-    CovNoi(1,1) = pow(sigmaXis[1],2) ;
-    CovNoi(2,2) = pow(sigmaXis[2],2) ;  
-    
-    for(int i = 0; i < n; ++i ) {
-      for(int j = 0; j < n; ++j ) {
-        
-        if( i != j){
-          NumericVector X = NumericVector::create(  A1(i,j), A2(i,j), A3(i,j) );
-          double SignalTerm = getTrivSignal(X,Mus, CovMat)  ;
-          double NoiseTerm  = getTrivSignal(X,Xis, CovNoi)  ;
-          Pq_ij (i,j) =  tau(i,q)*tau(j,q)/2* (SignalTerm  -  NoiseTerm )    ; 
-        }
-      }
-    }
-    QQ[q] = MatrixSum(Pq_ij)   ;
-  }
-  return QQ;
-}
-
-  
-  
-  // [[Rcpp::export]]
-  NumericVector E_Nq   (NumericMatrix A1, 
-                       NumericMatrix A2,  
-                       NumericMatrix A3,  
-                       NumericMatrix tau,  
-                       NumericVector Mu1,
-                       NumericVector Mu2,
-                       NumericVector Mu3,
-                       NumericVector SigmaX,
-                       NumericVector SigmaY,
-                       NumericVector SigmaZ,
-                       NumericVector SigmaXY,
-                       NumericVector SigmaYZ,
-                       NumericVector SigmaXZ,
-                       NumericVector Xis,
-                       NumericVector sigmaXis ){
-    int n = tau.nrow();
-    int Q = tau.ncol();
-    
-    NumericVector QQ(Q); 
-    
-    for(int q = 0; q < Q; ++q ) { 
-      
-      NumericMatrix Pq_ij (n,n);
-      
-      NumericVector Mus = NumericVector::create(  Mu1[q], Mu2[q], Mu3[q]);
-      arma::mat CovMat =   makeCovSig( q, SigmaX,SigmaY , SigmaZ, SigmaXY, SigmaYZ ,  SigmaXZ);
-      arma::mat  CovNoi (3,3);
-      CovNoi(0,0) = pow(sigmaXis[0],2) ;
-      CovNoi(1,1) = pow(sigmaXis[1],2) ;
-      CovNoi(2,2) = pow(sigmaXis[2],2) ;  
-      
-      for(int i = 0; i < n; ++i ) {
-        for(int j = 0; j < n; ++j ) {
-          
-          if( i != j){
-            NumericVector X = NumericVector::create(  A1(i,j), A2(i,j), A3(i,j) );
-            double SignalTerm = getTrivSignal(X,Mus, CovMat)  ;
-            double NoiseTerm  = getTrivSignal(X,Xis, CovNoi)  ;
-            Pq_ij (i,j) =  tau(i,q)*tau(j,q)/2* (NoiseTerm -SignalTerm  )    ; 
-          }
-        }
-      }
-      QQ[q] = MatrixSum(Pq_ij)   ;
-    }
-    return QQ;
-  }
-
 
 
 
@@ -326,6 +226,7 @@ double E_Nq_Simp_q   (NumericMatrix A1,
         NumericVector X = NumericVector::create(  A1(i,j), A2(i,j), A3(i,j) );
         double SignalTerm = getTrivSignal_Inv(X,Mus_q, CovMat_q, InvCovMat_q)  ;
         double NoiseTerm  = getTrivSignal_Inv(X,Xis,   CovNoi  , InvCovNoi)  ;
+
         Pq_ij (i,j) =  tau_q[i]*tau_q(j)/2* (NoiseTerm -SignalTerm  )    ; 
       }
     }
